@@ -1,0 +1,63 @@
+{
+    "name": "PS-MT(DeeplabV3+)",
+    "experim_name": "TEST_warm",
+    "n_labeled_examples": 515,
+    "ramp_up": 12,
+    "unsupervised_w": 1.5,
+    "lr_scheduler": "Poly",
+    "gamma": 0.5,
+
+    "model":{
+        "supervised": false,
+        "semi": true,
+        "resnet": 50,
+        "sup_loss": "DE",
+        "un_loss": "semi_ce",
+        "epochs": 80,
+        "warm_up_epoch": 5
+    },
+
+
+    "optimizer": {
+        "type": "SGD",
+        "args":{
+            "lr": 1e-2,
+            "weight_decay": 1e-4,
+            "momentum": 0.9
+        }
+    },
+
+    "train_supervised": {
+        "data_dir": "FA",
+        "batch_size": 8,
+        "shuffle": true,
+        "crop_size": 224,
+        "split": "train_supervised",
+        "num_workers": 8
+    },
+
+    "train_unsupervised": {
+        "data_dir": "range_unFA",
+        "batch_size": 8,
+        "shuffle": true,
+        "crop_size": 224,
+        "split": "train_unsupervised",
+        "num_workers": 8
+    },
+
+    "val_loader": {
+        "data_dir": "FA",
+        "batch_size": 1,
+        "split": "val",
+        "shuffle": false,
+        "num_workers": 4
+    },
+
+    "test_loader": {
+        "data_dir": "FA",
+        "batch_size": 1,
+        "split": "test",
+        "shuffle": false,
+        "num_workers": 4
+    }
+}
