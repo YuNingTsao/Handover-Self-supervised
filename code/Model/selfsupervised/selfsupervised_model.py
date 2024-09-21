@@ -4,7 +4,9 @@ import torch.nn.functional as F
 import numpy as np
 
 from Model.Deeplabv3_plus.encoder_decoder import *
-from Utils.losses import *
+from Model.selfsupervised.selfsupervised_encoder_decoder import *
+from Utils.selfsupervised_mask import *
+
 
 res_net_2 = "Model/Deeplabv3_plus/Backbones/pretrained/resnet{}.pth"
 
@@ -44,79 +46,62 @@ class Teacher_Net(nn.Module):
                  cons_w_unsup=None, pretrained=True, weakly_loss_w=0.4):
         super(Teacher_Net, self).__init__()
 
-        self.encoder = EncoderNetwork(num_classes=num_classes, norm_layer=nn.BatchNorm2d,
-                                       pretrained_model=None, back_bone=config['resnet'])
-        self.decoder = DecoderNetwork(num_classes=num_classes, data_shape=config['data_h_w'])
+#       self.maskAutoEncoder = nn.AutoEncoder
+        self.maskAutoEncoder = MaskedAutoencoder()        
+        self.segmentationMAE = MaskedAutoencoderForSegmentation(pretrained_encoder=self.maskAutoEncoder)
 
-        self.dice_loss = DiceLoss(num_classes)
-        
-
-    def warm_up_forward(self, x, y):
-        f = self.encoder(x)
-        _, output_l = self.decoder(f)
-        loss = self.dice_loss(torch.sigmoid(output_l), torch.sigmoid(y[:]).long())
-        outputs = {'sup_pred': output_l}
+    def warm_up_forward(self, input=None):
+        loss, output = self.maskAutoEncoder(input)
+        outputs = {'self_pred': output}
         return loss, outputs
-    
-    def forward(self, x_FA=None, x_ICG=None, target_l=None,
-                warm_up=False, mix_up=False):
+   
+    #    
+    def forward(self, input_ul=None, target_ul=None, x_FA=None, x_ICG=None, target_l=None, warm_up=False, mix_up=False):
         if mix_up:
             for i in range(0, int(x_FA.shape[0])): 
                 x_FA[i], target_l[i] = mixup_data_FAICG(input_fa = x_FA[i], target_fa = target_l[i],
                                                         input_icg = x_ICG[i], target_icg = target_l[i])
-
-        if warm_up:
-            return self.warm_up_forward(x=x_FA, y=target_l)
+        if warm_up: #warm up without segmentation groundtruth (ordinary MAE)
+            return self.warm_up_forward(self, x_FA)
+            
+        else: #unlabeled prediction in semi-train
+            output, loss = self.segmentationMAE(input_ul, target_ul)
+            return loss, output
     
 class Student_Net(nn.Module):
     def __init__(self, num_classes, config, sup_loss=None, 
                  cons_w_unsup=None, pretrained=True, weakly_loss_w=0.4):
         super(Student_Net, self).__init__()
 
-        self.encoder = EncoderNetwork(num_classes=num_classes, norm_layer=nn.BatchNorm2d,
-                                        pretrained_model=res_net_2.format(str(config['resnet'])),
-                                        back_bone=config['resnet'])
-        self.decoder = VATDecoderNetwork(num_classes=num_classes, data_shape=config['data_h_w'])
-
-        self.unsup_loss_w = cons_w_unsup
-        self.unsuper_loss = semi_ce_loss
-        self.dice_loss = DiceLoss(num_classes)
+        self.maskAutoEncoder = MaskedAutoencoder()
+        self.segmentationMAE = MaskedAutoencoderForSegmentation(pretrained_encoder=self.maskAutoEncoder)
+        
     
-    def warm_up_forward(self, x, y):
-        f = self.encoder(x)
-        output_l = self.decoder(fa = f)
-
-        loss = self.dice_loss(torch.sigmoid(output_l), torch.sigmoid(y[:]).long())
-        outputs = {'sup_pred': output_l}
+    def warm_up_forward(self, input):
+        loss, output = self.maskAutoEncoder(input)
+        outputs = {'self_pred': output}
         return loss, outputs
     
     def forward(self, x_FA=None, x_ICG=None, target_l=None, x_ul=None, target_ul=None,
                 warm_up=False, mix_up=False, semi_p_th=0.6, semi_n_th=0.0, 
                 epoch=None, curr_iter = None, t1=None, t2=None):
-        if warm_up:
-            return self.warm_up_forward(x=x_FA, y=target_l)
+        if warm_up: #warm up without segmentation groundtruth (ordinary MAE)
+            return self.warm_up_forward(self, x_FA)
 
-        # labeled data prediction
-        x_l = x_FA
-        f = self.encoder(x_l)
-        output_l = self.decoder(fa=f, icg=f, t_model=[t1.decoder, t2.decoder])
+        # predict labeled data
+        output_l, loss_sup = self.segmentationMAE(x_FA, target_l)
         # supervised loss
-        loss_sup = self.dice_loss(torch.sigmoid(output_l), torch.sigmoid(target_l[:]).long())
         curr_losses = {'loss_sup': loss_sup}
         
-        #unlabelled data prediction
+        # predict unlabeled data
         labels1, labels2, lamb = None, None, None
         if mix_up: 
             imgs, labels1, labels2, lamb = mixup_data(x_ul, target_ul)
-            f = self.encoder(imgs)
-            output_ul = self.decoder(fa=f, icg=f, t_model=[t1.decoder, t2.decoder])
-            loss_unsup, pass_rate, neg_loss = self.unsuper_loss(inputs=output_ul, targets=target_ul,
-                                                                label_1 = labels1, label_2 = labels2, lamb = lamb,
-                                                                conf_mask=True, mix_up=mix_up,
-                                                                threshold=semi_p_th, threshold_neg=semi_n_th)
+            output_ul, loss_unsup = self.segmentationMAE(imgs, target_ul)
+                                                                 
         else:
-            f = self.encoder(x_ul)
-            output_ul = self.decoder(fa=f, icg=f, t_model=[t1.decoder, t2.decoder])
+            output_ul, loss_unsup = self.segmentationMAE(imgs, target_ul)
+            # calculate consistency loss (loss of unalabled data prediction of teacher and student)
             loss_unsup, pass_rate, neg_loss = self.unsuper_loss(inputs=output_ul, targets=target_ul,
                                                                 label_1 = labels1, label_2 = labels2, lamb = lamb,
                                                                 conf_mask=True, mix_up=mix_up,
