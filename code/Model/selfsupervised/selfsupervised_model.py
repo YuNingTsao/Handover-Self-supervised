@@ -3,12 +3,10 @@ import torch.nn.functional as F
 
 import numpy as np
 
-from Model.Deeplabv3_plus.encoder_decoder import *
 from Model.selfsupervised.selfsupervised_encoder_decoder import *
-from Utils.selfsupervised_mask import *
+from Utils.losses import *
 
 
-res_net_2 = "Model/Deeplabv3_plus/Backbones/pretrained/resnet{}.pth"
 
 #mix FA & ICG data with given portion as input data
 # used by teacher
@@ -62,7 +60,7 @@ class Teacher_Net(nn.Module):
                 x_FA[i], target_l[i] = mixup_data_FAICG(input_fa = x_FA[i], target_fa = target_l[i],
                                                         input_icg = x_ICG[i], target_icg = target_l[i])
         if warm_up: #warm up without segmentation groundtruth (ordinary MAE)
-            return self.warm_up_forward(self, x_FA)
+            return self.warm_up_forward(input_ul)
             
         else: #unlabeled prediction in semi-train
             output, loss = self.segmentationMAE(input_ul, target_ul)
@@ -86,7 +84,7 @@ class Student_Net(nn.Module):
                 warm_up=False, mix_up=False, semi_p_th=0.6, semi_n_th=0.0, 
                 epoch=None, curr_iter = None, t1=None, t2=None):
         if warm_up: #warm up without segmentation groundtruth (ordinary MAE)
-            return self.warm_up_forward(self, x_FA)
+            return self.warm_up_forward(x_ul)
 
         # predict labeled data
         output_l, loss_sup = self.segmentationMAE(x_FA, target_l)

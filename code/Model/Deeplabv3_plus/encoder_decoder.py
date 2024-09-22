@@ -92,6 +92,7 @@ def get_r_adv_t(x, x1, decoder1, decoder2, it=1, xi=1e-1, eps=10.0):
     decoder2.train()
     return r_adv
 
+
 class upsample(nn.Module):
     def __init__(self, in_channels, out_channels, data_shape,
                  norm_act=nn.BatchNorm2d):
