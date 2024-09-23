@@ -63,7 +63,7 @@ class Teacher_Net(nn.Module):
             return self.warm_up_forward(input_ul)
             
         else: #unlabeled prediction in semi-train
-            output, loss = self.segmentationMAE(input_ul, target_ul)
+            loss, output = self.segmentationMAE(input_ul, target_ul)
             return loss, output
     
 class Student_Net(nn.Module):
@@ -73,6 +73,9 @@ class Student_Net(nn.Module):
 
         self.maskAutoEncoder = MaskedAutoencoder()
         self.segmentationMAE = MaskedAutoencoderForSegmentation(pretrained_encoder=self.maskAutoEncoder)
+        self.unsup_loss_w = cons_w_unsup
+        self.unsuper_loss = semi_ce_loss
+        self.dice_loss = DiceLoss(num_classes)
         
     
     def warm_up_forward(self, input):
@@ -87,7 +90,7 @@ class Student_Net(nn.Module):
             return self.warm_up_forward(x_ul)
 
         # predict labeled data
-        output_l, loss_sup = self.segmentationMAE(x_FA, target_l)
+        loss_sup, output_l = self.segmentationMAE(x_FA, target_l)
         # supervised loss
         curr_losses = {'loss_sup': loss_sup}
         
@@ -95,10 +98,10 @@ class Student_Net(nn.Module):
         labels1, labels2, lamb = None, None, None
         if mix_up: 
             imgs, labels1, labels2, lamb = mixup_data(x_ul, target_ul)
-            output_ul, loss_unsup = self.segmentationMAE(imgs, target_ul)
+            loss_unsup, output_ul = self.segmentationMAE(imgs, target_ul)
                                                                  
         else:
-            output_ul, loss_unsup = self.segmentationMAE(imgs, target_ul)
+            loss_unsup, output_ul = self.segmentationMAE(x_ul, target_ul)
             # calculate consistency loss (loss of unalabled data prediction of teacher and student)
             loss_unsup, pass_rate, neg_loss = self.unsuper_loss(inputs=output_ul, targets=target_ul,
                                                                 label_1 = labels1, label_2 = labels2, lamb = lamb,

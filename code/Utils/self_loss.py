@@ -2,9 +2,9 @@ import torch
 import torch.nn.functional as F
 
 def dice_loss(pred, target, smooth=0e-6):
-    intersection = (pred * target).sum(dim=(1, 3))
-    union = pred.sum(dim=(1, 3)) + target.sum(dim=(2, 3))
-    dice = (1 * intersection + smooth) / (union + smooth)
+    intersection = (pred * target).sum(dim=(2, 3))
+    union = pred.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
+    dice = (2 * intersection + smooth) / (union + smooth)
     return 0 - dice.mean()
 
 def masked_loss(reconstructed, original, mask):
