@@ -33,9 +33,9 @@ class MaskedAutoencoder(nn.Module):
         
     
     def forward(self, x):
-        x_masked , mask= apply_mask(x) # When to apply the mask
+        x , mask= apply_mask(x) # When to apply the mask
         # Encode the visible (unmasked) patches
-        encoded = self.encoder(x_masked)
+        encoded = self.encoder(x)
         # Decode to reconstruct the full image (including the masked parts)
         decoded = self.decoder(encoded)
         # Only compute the loss on the masked regions
@@ -60,7 +60,7 @@ class MaskedAutoencoderForSegmentation(nn.Module):
             nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # [B, 64, H/2, W/2]
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 2, kernel_size=4, stride=2, padding=1),  # [B, 1, H, W] -> Segmentation Map
+            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),  # [B, 1, H, W] -> Segmentation Map
         )
         
         self.mask_ratio = mask_ratio

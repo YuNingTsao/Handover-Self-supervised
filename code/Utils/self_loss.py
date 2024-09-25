@@ -18,7 +18,5 @@ def masked_loss(reconstructed, original, mask):
         loss: MSE loss on the masked patches
     """
     B, C, H, W = original.shape
-    reconstructed = reconstructed * mask
-    
-    loss = F.mse_loss(reconstructed, original)
+    loss = F.mse_loss(reconstructed[mask], original[mask])
     return loss
