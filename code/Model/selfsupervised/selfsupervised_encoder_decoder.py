@@ -6,6 +6,8 @@ from functools import partial
 
 from Utils.self_loss import *
 from Utils.self_mask import *
+from Utils.losses import *
+
 class MaskedAutoencoder(nn.Module):
     def __init__(self, in_channels=3, out_channels=3, latent_dim=128):
         super(MaskedAutoencoder, self).__init__()
@@ -27,7 +29,6 @@ class MaskedAutoencoder(nn.Module):
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
             nn.ConvTranspose2d(64, out_channels, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid()  # Sigmoid to bring values between 0 and 1
         )
         
     
@@ -44,7 +45,7 @@ class MaskedAutoencoder(nn.Module):
         return mask_loss, decoded
     
 class MaskedAutoencoderForSegmentation(nn.Module):
-    def __init__(self, input_size=(224, 224), mask_ratio=0.75, pretrained_encoder=None):
+    def __init__(self, mask_ratio=0.75, pretrained_encoder=None, latent_dim=128, num_classes=2):
         super(MaskedAutoencoderForSegmentation, self).__init__()
         
         # Encoder (Compress image to latent space)
@@ -52,13 +53,18 @@ class MaskedAutoencoderForSegmentation(nn.Module):
         
         # Decoder for Segmentation (Predict mask instead of reconstructing image)
         self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 256 * 28 * 28),
+            nn.ReLU(),
+            nn.Unflatten(1, (256, 28, 28)),  # [B, 256, 28, 28]
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),  # [B, 128, H/2, W/2]
+            nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # [B, 64, H/2, W/2]
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),  # [B, 1, H, W] -> Segmentation Map
-            nn.Softmax()  # Sigmoid for binary segmentation, or softmax for multi-class
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, num_classes, kernel_size=4, stride=2, padding=1),  # [B, 1, H, W] -> Segmentation Map
         )
         
         self.mask_ratio = mask_ratio
+        self.diceloss = DiceLoss(num_classes)
     
     def forward(self, x, target):
         # Apply masking
@@ -69,6 +75,8 @@ class MaskedAutoencoderForSegmentation(nn.Module):
         
         # Decode to get segmentation map
         segmentation_output = self.decoder(encoded)
-        loss = dice_loss(segmentation_output, target)
-        
+#       loss = dice_loss(segmentation_output, target)
+        loss = self.diceloss(torch.sigmoid(segmentation_output), torch.sigmoid(target[:].long()))
+
         return loss, segmentation_output
+#       return None, segmentation_output
