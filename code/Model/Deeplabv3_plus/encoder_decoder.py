@@ -55,6 +55,7 @@ def _l2_normalize(d):
     return d
 
 
+#VAT(virtual adversal training)
 def get_r_adv_t(x, x1, decoder1, decoder2, it=1, xi=1e-1, eps=10.0):
     # stop bn
     decoder1.eval()

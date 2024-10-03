@@ -8,7 +8,6 @@ from Utils.losses import *
 from Utils.self_loss import *
 
 
-res_net_2 = "Model/Deeplabv3_plus/Backbones/pretrained/resnet{}.pth"
 
 #mix FA & ICG data with given portion as input data
 # used by teacher
@@ -53,10 +52,9 @@ class Teacher_Net(nn.Module):
         self.dice_loss = DiceLoss(num_classes)
         
 
-    def warm_up_forward(self, x, y):
-        f = self.encoder(x)
-        _, output_ul = self.decoder(f)
-        loss = self.masked_loss(torch.sigmoid(output_ul), torch.sigmoid(y[:]).long())
+    def warm_up_forward(self, x):
+        f, mask = self.encoder(x)
+        loss, output_ul, _ = self.decoder(f, mask)
         outputs = {'self_pred': output_ul}
         return loss, outputs
     

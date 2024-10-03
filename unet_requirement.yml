@@ -1,0 +1,24 @@
+name: unet
+channels:
+  - conda-forge
+dependencies:
+ - zlib
+ - xz
+ - wheel
+ - tk
+ - sqlite
+ - setuptools
+ - readline
+ - python
+ - pip
+ - openssl
+ - ncurses
+ - libstdcxx-ng
+ - libgomp
+ - libgcc-ng
+ - libffi
+ - ld_impl_linux-64
+ - certifi
+ - ca-certificates
+ - _openmp_mutex
+ - _libgcc_mutex
